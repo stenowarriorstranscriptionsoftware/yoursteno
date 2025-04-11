@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Steno Warriors Transcription</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Steno Warriors</h1>
+      <p class="subtitle">Advanced Transcription Comparison Tool</p>
+    </header>
+
+    <main>
+      <section class="input-section">
+        <div class="input-group" id="originalTextGroup">
+          <label for="originalText">Original Text</label>
+          <textarea id="originalText" placeholder="Paste the original text here..."></textarea>
+        </div>
+        
+        <div id="timerOptions" class="timer-options hidden">
+          <button class="timer-option" data-minutes="40">40 Minutes</button>
+          <button class="timer-option" data-minutes="50">50 Minutes</button>
+        </div>
+        
+        <div id="timerDisplay" class="timer-display hidden"></div>
+        
+        <div class="input-group">
+          <label for="userText">Your Transcription</label>
+          <textarea id="userText" placeholder="Type or paste your transcription here..."></textarea>
+        </div>
+        
+        <div class="button-group test-controls">
+          <button id="compareBtn">Compare Texts</button>
+          <button id="showFullTextBtn" class="secondary-btn">View Full Texts</button>
+          <button id="closeResultsBtn" class="close-results-btn hidden">Close Results</button>
+        </div>
+      </section>
+
+      <section id="results" class="hidden">
+        <div class="results-header">
+          <div>
+            <h2>Results</h2>
+            <div class="result-meta">
+              <span id="resultDate"></span>
+              <span>Steno Warriors Transcription Tool</span>
+            </div>
+          </div>
+          <button id="downloadPdfBtn" class="download-btn">Download as PDF</button>
+        </div>
+
+        <div class="comparison-section">
+          <div class="legend-box">
+            <div class="legend-row"><span class="correct">■</span> Correct</div>
+            <div class="legend-row"><span class="missing">■</span> Missing</div>
+            <div class="legend-row"><span class="addition">■</span> Added</div>
+            <div class="legend-row"><span class="spelling">■</span> Spelling</div>
+            <div class="legend-row"><span class="capitalization">■</span> Capitalization</div>
+          </div>
+          <div id="comparisonResult" class="result-box"></div>
+        </div>
+
+        <div class="analysis-section">
+          <div class="analysis-column">
+            <h3>Statistics</h3>
+            <div id="stats" class="stats-box"></div>
+          </div>
+          <div class="analysis-column">
+            <h3>Feedback</h3>
+            <div id="feedback" class="feedback-box"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="fullTextSection" class="hidden">
+        <div class="fulltext-header">
+          <h2>Full Texts</h2>
+          <button id="backToResultsBtn" class="secondary-btn">Back to Results</button>
+        </div>
+        <div class="columns">
+          <div class="column">
+            <h3>Original Text</h3>
+            <div id="originalDisplay" class="text-display"></div>
+          </div>
+          <div class="column">
+            <h3>Your Transcription</h3>
+            <div id="userDisplay" class="text-display"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>© 2023 Steno Warriors | Professional Transcription Tool</p>
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
