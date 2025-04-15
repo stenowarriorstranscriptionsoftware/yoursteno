@@ -411,7 +411,6 @@ footer {
   border-color: var(--primary-light);
   box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.2);
 }
-/* Add these new styles to your existing styles.css */
 
 /* Auth Styles */
 .auth-btn {
@@ -510,6 +509,7 @@ footer {
   border-radius: 50%;
   margin-right: 8px;
 }
+
 /* Leaderboard Styles */
 .leaderboard-section {
   padding: 2rem;
@@ -522,13 +522,21 @@ footer {
 .leaderboard-controls {
   margin-bottom: 1rem;
   display: flex;
-  justify-content: flex-end;
+  gap: 0.8rem;
+  align-items: center;
 }
 
 .leaderboard-controls select {
   padding: 0.5rem;
   border-radius: 5px;
   border: 1px solid #e2e8f0;
+}
+
+.pagination-info {
+  text-align: center;
+  margin-top: 1rem;
+  color: var(--gray);
+  font-size: 0.9rem;
 }
 
 .leaderboard-list {
@@ -583,4 +591,8 @@ footer {
 
 .accuracy-low {
   color: #e74c3c;
+}
+.test-card.selected {
+  border: 2px solid var(--primary);
+  background-color: rgba(67, 97, 238, 0.1);
 }

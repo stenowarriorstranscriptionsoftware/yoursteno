@@ -48,6 +48,10 @@ document.addEventListener('DOMContentLoaded', function() {
   const leaderboardSection = document.getElementById('leaderboardSection');
   const leaderboardList = document.getElementById('leaderboardList');
   const leaderboardFilter = document.getElementById('leaderboardFilter');
+  const testNameFilter = document.getElementById('testNameFilter');
+  const prevPageBtn = document.getElementById('prevPageBtn');
+  const nextPageBtn = document.getElementById('nextPageBtn');
+  const leaderboardPagination = document.getElementById('leaderboardPagination');
 
   // Custom Test Logic
   const saveBtn = document.getElementById('saveTestBtn');
@@ -61,6 +65,13 @@ document.addEventListener('DOMContentLoaded', function() {
   let testActive = false;
   let timerButtons = document.querySelectorAll('.timer-option');
   
+  // Leaderboard pagination variables
+  let currentPage = 1;
+  const entriesPerPage = 10;
+  let allAttempts = [];
+  let filteredAttempts = [];
+  let uniqueTestNames = new Set();
+
   // Initialize typing timer
   let startTime = null;
   userTextEl.addEventListener('input', function() {
@@ -83,6 +94,7 @@ document.addEventListener('DOMContentLoaded', function() {
       leaderboardSection.classList.remove('hidden');
       loadGlobalTests();
       loadLeaderboard();
+      cleanupOldData(); // Run cleanup when user logs in
     } else {
       // User is signed out
       loginBtn.classList.remove('hidden');
@@ -110,9 +122,34 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   // Leaderboard filter change handler
-  leaderboardFilter.addEventListener('change', loadLeaderboard);
+  leaderboardFilter.addEventListener('change', () => {
+    currentPage = 1;
+    loadLeaderboard();
+  });
 
-  // Load leaderboard data
+  // Test name filter change handler
+  testNameFilter.addEventListener('change', () => {
+    currentPage = 1;
+    loadLeaderboard();
+  });
+
+  // Pagination button handlers
+  prevPageBtn.addEventListener('click', () => {
+    if (currentPage > 1) {
+      currentPage--;
+      updatePagination();
+    }
+  });
+
+  nextPageBtn.addEventListener('click', () => {
+    const totalPages = Math.ceil(filteredAttempts.length / entriesPerPage);
+    if (currentPage < totalPages) {
+      currentPage++;
+      updatePagination();
+    }
+  });
+
+  // Load leaderboard data with pagination
   function loadLeaderboard() {
     const filter = leaderboardFilter.value;
     let query = database.ref('attempts').orderByChild('timestamp');
@@ -132,172 +169,172 @@ document.addEventListener('DOMContentLoaded', function() {
         const attempts = snapshot.val();
         if (!attempts) {
           leaderboardList.innerHTML = '<p>No attempts recorded yet. Be the first to complete a test!</p>';
+          leaderboardPagination.innerHTML = '';
           return;
         }
 
         // Convert to array and sort by accuracy (descending)
-        const attemptsArray = Object.entries(attempts).map(([id, attempt]) => attempt);
-        attemptsArray.sort((a, b) => b.stats.accuracy - a.stats.accuracy);
-
-        // Build leaderboard table
-        let tableHTML = `
-          <table>
-            <thead>
-              <tr>
-                <th>Rank</th>
-                <th>User</th>
-                <th>Test</th>
-                <th>Accuracy</th>
-                <th>Speed (WPM)</th>
-                <th>Words</th>
-                <th>Half Mistakes</th>
-                <th>Full Mistakes</th>
-                <th>Date</th>
-              </tr>
-            </thead>
-            <tbody>
-        `;
-
-        attemptsArray.forEach((attempt, index) => {
-          const date = new Date(attempt.timestamp);
-          const accuracyClass = 
-            attempt.stats.accuracy >= 90 ? 'accuracy-high' :
-            attempt.stats.accuracy >= 70 ? 'accuracy-medium' : 'accuracy-low';
-
-          tableHTML += `
-            <tr>
-              <td>${index + 1}</td>
-              <td class="leaderboard-user">
-                <img src="${attempt.userPhoto}" alt="${attempt.userName}">
-                <span>${attempt.userName}</span>
-              </td>
-              <td>${attempt.testTitle || 'Custom Test'}</td>
-              <td class="accuracy-cell ${accuracyClass}">${attempt.stats.accuracy.toFixed(1)}%</td>
-              <td>${attempt.stats.wpm}</td>
-              <td>${attempt.stats.totalUser}</td>
-              <td>${attempt.stats.halfMistakes}</td>
-              <td>${attempt.stats.fullMistakes}</td>
-              <td>${date.toLocaleDateString()}</td>
-            </tr>
-          `;
-        });
-
-        tableHTML += `</tbody></table>`;
-        leaderboardList.innerHTML = tableHTML;
+        allAttempts = Object.entries(attempts).map(([id, attempt]) => ({
+          id,
+          ...attempt
+        }));
+        
+        allAttempts.sort((a, b) => b.stats.accuracy - a.stats.accuracy);
+        
+        // Update test name filter options
+        updateTestNameFilter(allAttempts);
+        
+        // Filter by test name if selected
+        filteredAttempts = testNameFilter.value === 'all' 
+          ? allAttempts 
+          : allAttempts.filter(attempt => attempt.testTitle === testNameFilter.value);
+          
+        // Update pagination
+        updatePagination();
       })
       .catch(error => {
         console.error('Error loading leaderboard:', error);
         leaderboardList.innerHTML = '<p>Error loading leaderboard. Please try again later.</p>';
+        leaderboardPagination.innerHTML = '';
       });
   }
 
-  // Load global tests from Firebase
-  function loadGlobalTests() {
-    database.ref('tests').once('value')
-      .then(snapshot => {
-        globalTestsList.innerHTML = '';
-        const tests = snapshot.val();
-        
-        if (!tests) {
-          globalTestsList.innerHTML = '<p>No community tests yet. Be the first to share one!</p>';
-          return;
-        }
-        
-        Object.entries(tests).forEach(([id, test]) => {
-          const testCard = document.createElement('div');
-          testCard.className = 'test-card';
-          testCard.innerHTML = `
-            <h4>${test.title}</h4>
-            <p>${test.text.substring(0, 100)}${test.text.length > 100 ? '...' : ''}</p>
-            <div class="test-author">
-              <img src="${test.userPhoto}" alt="${test.userName}">
-              <span>Added by ${test.userName}</span>
-            </div>
-          `;
-          testCard.addEventListener('click', () => {
-            originalTextEl.value = test.text;
-            originalTextGroup.classList.add('hidden');
-            timerOptions.classList.remove('hidden');
-            timerButtons.forEach(btn => {
-              btn.disabled = false;
-              btn.style.opacity = '1';
-            });
-          });
-          globalTestsList.appendChild(testCard);
-        });
-      })
-      .catch(error => {
-        console.error('Error loading tests:', error);
-        globalTestsList.innerHTML = '<p>Error loading community tests. Please try again later.</p>';
-      });
-  }
-
-  // Save test to Firebase
-  saveBtn.addEventListener('click', () => {
-    const user = auth.currentUser;
-    if (!user) {
-      alert('Please login to save tests.');
-      return;
-    }
-
-    const title = customTitle.value.trim();
-    const text = customOriginal.value.trim();
+  function updateTestNameFilter(attempts) {
+    uniqueTestNames = new Set(attempts.map(attempt => attempt.testTitle || 'Custom Test'));
+    const currentTestFilter = testNameFilter.value;
     
-    if (!title || !text) {
-      alert('Please enter both a title and the original text.');
+    testNameFilter.innerHTML = '<option value="all">All Tests</option>';
+    uniqueTestNames.forEach(testName => {
+      const option = document.createElement('option');
+      option.value = testName;
+      option.textContent = testName;
+      testNameFilter.appendChild(option);
+    });
+    
+    // Restore previous selection if it still exists
+    if (currentTestFilter !== 'all' && uniqueTestNames.has(currentTestFilter)) {
+      testNameFilter.value = currentTestFilter;
+    } else {
+      testNameFilter.value = 'all';
+    }
+  }
+
+  function updatePagination() {
+    const totalPages = Math.ceil(filteredAttempts.length / entriesPerPage);
+    const startIdx = (currentPage - 1) * entriesPerPage;
+    const endIdx = startIdx + entriesPerPage;
+    const pageAttempts = filteredAttempts.slice(startIdx, endIdx);
+    
+    // Update buttons
+    prevPageBtn.disabled = currentPage === 1;
+    nextPageBtn.disabled = currentPage === totalPages || totalPages === 0;
+    
+    // Update pagination info
+    leaderboardPagination.innerHTML = `Showing ${startIdx + 1}-${Math.min(endIdx, filteredAttempts.length)} of ${filteredAttempts.length} entries`;
+    
+    // Build leaderboard table
+    renderLeaderboardTable(pageAttempts, startIdx + 1);
+  }
+
+  function renderLeaderboardTable(attempts, startRank) {
+    if (attempts.length === 0) {
+      leaderboardList.innerHTML = '<p>No attempts match your filters.</p>';
       return;
     }
 
-    const testData = {
-      title,
-      text,
-      userName: user.displayName,
-      userPhoto: user.photoURL,
-      timestamp: firebase.database.ServerValue.TIMESTAMP
-    };
+    let tableHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>User</th>
+            <th>Test</th>
+            <th>Accuracy</th>
+            <th>Speed (WPM)</th>
+            <th>Words</th>
+            <th>Half Mistakes</th>
+            <th>Full Mistakes</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
 
-    database.ref('tests').push(testData)
-      .then(() => {
-        alert('Test saved and shared with the community!');
-        customTitle.value = '';
-        customOriginal.value = '';
-        loadGlobalTests();
-      })
-      .catch(error => {
-        console.error('Error saving test:', error);
-        alert('Failed to save test. Please try again.');
+    attempts.forEach((attempt, index) => {
+      const date = new Date(attempt.timestamp);
+      const accuracyClass = 
+        attempt.stats.accuracy >= 90 ? 'accuracy-high' :
+        attempt.stats.accuracy >= 70 ? 'accuracy-medium' : 'accuracy-low';
+
+      tableHTML += `
+        <tr>
+          <td>${startRank + index}</td>
+          <td class="leaderboard-user">
+            <img src="${attempt.userPhoto}" alt="${attempt.userName}">
+            <span>${attempt.userName}</span>
+          </td>
+          <td>${attempt.testTitle || 'Custom Test'}</td>
+          <td class="accuracy-cell ${accuracyClass}">${attempt.stats.accuracy.toFixed(1)}%</td>
+          <td>${attempt.stats.wpm}</td>
+          <td>${attempt.stats.totalUser}</td>
+          <td>${attempt.stats.halfMistakes}</td>
+          <td>${attempt.stats.fullMistakes}</td>
+          <td>${date.toLocaleDateString()}</td>
+        </tr>
+      `;
+    });
+
+    tableHTML += `</tbody></table>`;
+    leaderboardList.innerHTML = tableHTML;
+  }
+
+  // Auto-delete old data function
+  function cleanupOldData() {
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    const timestampThreshold = threeMonthsAgo.getTime();
+
+    // Cleanup old attempts
+    database.ref('attempts').once('value').then(snapshot => {
+      const updates = {};
+      snapshot.forEach(child => {
+        if (child.val().timestamp < timestampThreshold) {
+          updates[child.key] = null;
+        }
       });
-  });
+      if (Object.keys(updates).length > 0) {
+        database.ref('attempts').update(updates)
+          .then(() => console.log('Old attempts cleaned up'))
+          .catch(error => console.error('Error cleaning up attempts:', error));
+      }
+    });
 
-  // Clear user's tests
-  clearBtn.addEventListener('click', () => {
-    if (confirm('Are you sure you want to delete all your shared tests?')) {
-      const user = auth.currentUser;
-      if (!user) return;
+    // Cleanup old tests
+    database.ref('tests').once('value').then(snapshot => {
+      const updates = {};
+      snapshot.forEach(child => {
+        if (child.val().timestamp < timestampThreshold) {
+          updates[child.key] = null;
+        }
+      });
+      if (Object.keys(updates).length > 0) {
+        database.ref('tests').update(updates)
+          .then(() => console.log('Old tests cleaned up'))
+          .catch(error => console.error('Error cleaning up tests:', error));
+      }
+    });
+  }
 
-      database.ref('tests').once('value')
-        .then(snapshot => {
-          const updates = {};
-          snapshot.forEach(child => {
-            if (child.val().userName === user.displayName) {
-              updates[child.key] = null;
-            }
-          });
-          return database.ref('tests').update(updates);
-        })
-        .then(() => {
-          alert('Your shared tests have been removed.');
-          loadGlobalTests();
-        })
-        .catch(error => {
-          console.error('Error clearing tests:', error);
-          alert('Failed to clear tests. Please try again.');
-        });
-    }
-  });
+  // Run cleanup weekly
+  setInterval(cleanupOldData, 7 * 24 * 60 * 60 * 1000);
 
   // Original text paste handler
   originalTextEl.addEventListener('paste', function() {
+    // Clear any selected test card
+    document.querySelectorAll('.test-card').forEach(card => {
+      card.classList.remove('selected');
+    });
+    
     setTimeout(() => {
       if (originalTextEl.value.trim() !== '' && !testActive) {
         originalTextGroup.classList.add('hidden');
@@ -404,6 +441,13 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     
+    // Get the test title (either from the selected test card or use "Custom Test")
+    let testTitle = "Custom Test";
+    const selectedTestCard = document.querySelector('.test-card.selected');
+    if (selectedTestCard) {
+        testTitle = selectedTestCard.querySelector('h4').textContent;
+    }
+    
     // Process texts
     const originalWords = processText(originalText);
     const userWords = processText(userText);
@@ -432,12 +476,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // Save attempt to leaderboard if user is logged in
     const user = auth.currentUser;
     if (user) {
-      const testTitle = document.querySelector('.test-card h4')?.textContent || 'Custom Test';
-      
       const attemptData = {
         userName: user.displayName,
         userPhoto: user.photoURL,
-        testTitle: testTitle,
+        testTitle: testTitle,  // Use the determined test title
         stats: comparison.stats,
         timestamp: Date.now()
       };
@@ -805,7 +847,7 @@ document.addEventListener('DOMContentLoaded', function() {
     } else if (accuracy >= 70) {
       assessment += '<p>📝 <strong>Fair accuracy.</strong> Focus on reducing errors to improve your score.</p>';
     } else {
-      assessment += '<p>⚠️ <strong>Needs improvement.</strong> Work on accuracy before increasing speed.</p>';
+      assessment += '<p⚠️ <strong>Needs improvement.</strong> Work on accuracy before increasing speed.</p>';
     }
     
     if (wpm >= 50) {
@@ -850,4 +892,116 @@ document.addEventListener('DOMContentLoaded', function() {
     
     return suggestions.map(s => `<li>${s}</li>`).join('');
   }
+
+  // Load global tests from Firebase
+  function loadGlobalTests() {
+    database.ref('tests').once('value')
+      .then(snapshot => {
+        globalTestsList.innerHTML = '';
+        const tests = snapshot.val();
+        
+        if (!tests) {
+          globalTestsList.innerHTML = '<p>No community tests yet. Be the first to share one!</p>';
+          return;
+        }
+        
+        Object.entries(tests).forEach(([id, test]) => {
+          const testCard = document.createElement('div');
+          testCard.className = 'test-card';
+          testCard.innerHTML = `
+            <h4>${test.title}</h4>
+            <p>${test.text.substring(0, 100)}${test.text.length > 100 ? '...' : ''}</p>
+            <div class="test-author">
+              <img src="${test.userPhoto}" alt="${test.userName}">
+              <span>Added by ${test.userName}</span>
+            </div>
+          `;
+          testCard.addEventListener('click', () => {
+            // Remove selected class from all cards
+            document.querySelectorAll('.test-card').forEach(card => {
+              card.classList.remove('selected');
+            });
+            // Add selected class to clicked card
+            testCard.classList.add('selected');
+            
+            originalTextEl.value = test.text;
+            originalTextGroup.classList.add('hidden');
+            timerOptions.classList.remove('hidden');
+            timerButtons.forEach(btn => {
+              btn.disabled = false;
+              btn.style.opacity = '1';
+            });
+          });
+          globalTestsList.appendChild(testCard);
+        });
+      })
+      .catch(error => {
+        console.error('Error loading tests:', error);
+        globalTestsList.innerHTML = '<p>Error loading community tests. Please try again later.</p>';
+      });
+  }
+
+  // Save test to Firebase
+  saveBtn.addEventListener('click', () => {
+    const user = auth.currentUser;
+    if (!user) {
+      alert('Please login to save tests.');
+      return;
+    }
+
+    const title = customTitle.value.trim();
+    const text = customOriginal.value.trim();
+    
+    if (!title || !text) {
+      alert('Please enter both a title and the original text.');
+      return;
+    }
+
+    const testData = {
+      title,
+      text,
+      userName: user.displayName,
+      userPhoto: user.photoURL,
+      timestamp: firebase.database.ServerValue.TIMESTAMP
+    };
+
+    database.ref('tests').push(testData)
+      .then(() => {
+        alert('Test saved and shared with the community!');
+        customTitle.value = '';
+        customOriginal.value = '';
+        loadGlobalTests();
+      })
+      .catch(error => {
+        console.error('Error saving test:', error);
+        alert('Failed to save test. Please try again.');
+      });
+  });
+
+  // Clear user's tests
+  clearBtn.addEventListener('click', () => {
+    if (confirm('Are you sure you want to delete all your shared tests?')) {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      database.ref('tests').once('value')
+        .then(snapshot => {
+          const updates = {};
+          snapshot.forEach(child => {
+            if (child.val().userName === user.displayName) {
+              updates[child.key] = null;
+            }
+          });
+          return database.ref('tests').update(updates);
+        })
+        .then(() => {
+          alert('Your shared tests have been removed.');
+          loadGlobalTests();
+        })
+        .catch(error => {
+          console.error('Error clearing tests:', error);
+          alert('Failed to clear tests. Please try again.');
+        });
+    }
+  });
 });
