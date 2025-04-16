@@ -847,7 +847,7 @@ document.addEventListener('DOMContentLoaded', function() {
     } else if (accuracy >= 70) {
       assessment += '<p>📝 <strong>Fair accuracy.</strong> Focus on reducing errors to improve your score.</p>';
     } else {
-      assessment += '<p⚠️ <strong>Needs improvement.</strong> Work on accuracy before increasing speed.</p>';
+      assessment += '<p>⚠️ <strong>Needs improvement.</strong> Work on accuracy before increasing speed.</p>';
     }
     
     if (wpm >= 50) {
@@ -895,7 +895,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Load global tests from Firebase
   function loadGlobalTests() {
-    database.ref('tests').once('value')
+    database.ref('tests').orderByChild('timestamp').once('value')
       .then(snapshot => {
         globalTestsList.innerHTML = '';
         const tests = snapshot.val();
@@ -905,7 +905,16 @@ document.addEventListener('DOMContentLoaded', function() {
           return;
         }
         
-        Object.entries(tests).forEach(([id, test]) => {
+        // Convert to array and sort by timestamp (newest first)
+        const testsArray = Object.entries(tests).map(([id, test]) => ({
+          id,
+          ...test
+        })).sort((a, b) => b.timestamp - a.timestamp);
+        
+        // Show only 6 most recent tests
+        const recentTests = testsArray.slice(0, 6);
+        
+        recentTests.forEach(test => {
           const testCard = document.createElement('div');
           testCard.className = 'test-card';
           testCard.innerHTML = `
@@ -934,6 +943,51 @@ document.addEventListener('DOMContentLoaded', function() {
           });
           globalTestsList.appendChild(testCard);
         });
+        
+        // Add "Show More" button if there are more than 6 tests
+        if (testsArray.length > 6) {
+          const showMoreBtn = document.createElement('button');
+          showMoreBtn.className = 'secondary-btn';
+          showMoreBtn.textContent = 'Show More Tests';
+          showMoreBtn.style.marginTop = '1rem';
+          showMoreBtn.addEventListener('click', () => {
+            // Show all tests
+            globalTestsList.innerHTML = '';
+            testsArray.forEach(test => {
+              const testCard = document.createElement('div');
+              testCard.className = 'test-card';
+              testCard.innerHTML = `
+                <h4>${test.title}</h4>
+                <p>${test.text.substring(0, 100)}${test.text.length > 100 ? '...' : ''}</p>
+                <div class="test-author">
+                  <img src="${test.userPhoto}" alt="${test.userName}">
+                  <span>Added by ${test.userName}</span>
+                </div>
+              `;
+              testCard.addEventListener('click', () => {
+                document.querySelectorAll('.test-card').forEach(card => {
+                  card.classList.remove('selected');
+                });
+                testCard.classList.add('selected');
+                originalTextEl.value = test.text;
+                originalTextGroup.classList.add('hidden');
+                timerOptions.classList.remove('hidden');
+                timerButtons.forEach(btn => {
+                  btn.disabled = false;
+                  btn.style.opacity = '1';
+                });
+              });
+              globalTestsList.appendChild(testCard);
+            });
+            
+            // Change button to "Show Less"
+            showMoreBtn.textContent = 'Show Less';
+            showMoreBtn.onclick = () => {
+              loadGlobalTests(); // Reload with only 6 tests
+            };
+          });
+          globalTestsList.parentNode.appendChild(showMoreBtn);
+        }
       })
       .catch(error => {
         console.error('Error loading tests:', error);
@@ -978,30 +1032,87 @@ document.addEventListener('DOMContentLoaded', function() {
       });
   });
 
-  // Clear user's tests
+  // Clear user's tests with selection option
   clearBtn.addEventListener('click', () => {
-    if (confirm('Are you sure you want to delete all your shared tests?')) {
-      const user = auth.currentUser;
-      if (!user) return;
+    const user = auth.currentUser;
+    if (!user) return;
 
-      database.ref('tests').once('value')
-        .then(snapshot => {
-          const updates = {};
-          snapshot.forEach(child => {
-            if (child.val().userName === user.displayName) {
-              updates[child.key] = null;
-            }
-          });
-          return database.ref('tests').update(updates);
-        })
-        .then(() => {
-          alert('Your shared tests have been removed.');
-          loadGlobalTests();
-        })
-        .catch(error => {
-          console.error('Error clearing tests:', error);
-          alert('Failed to clear tests. Please try again.');
+    database.ref('tests').orderByChild('userName').equalTo(user.displayName).once('value')
+      .then(snapshot => {
+        const userTests = snapshot.val();
+        if (!userTests || Object.keys(userTests).length === 0) {
+          alert('You have no tests to delete.');
+          return;
+        }
+
+        // Create a modal to show test selection
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.innerHTML = `
+          <div class="modal-content">
+            <h3>Select Tests to Delete</h3>
+            <div class="test-selection"></div>
+            <div class="modal-buttons">
+              <button id="cancelDelete" class="secondary-btn">Cancel</button>
+              <button id="confirmDelete" class="danger-btn">Delete Selected</button>
+            </div>
+          </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        const testSelection = modal.querySelector('.test-selection');
+        const checkboxes = [];
+        
+        // Add checkboxes for each test
+        Object.entries(userTests).forEach(([id, test]) => {
+          const testItem = document.createElement('div');
+          testItem.className = 'test-item';
+          const checkboxId = `test-${id}`;
+          testItem.innerHTML = `
+            <input type="checkbox" id="${checkboxId}" checked>
+            <label for="${checkboxId}">${test.title}</label>
+          `;
+          testSelection.appendChild(testItem);
+          checkboxes.push({id, checkbox: testItem.querySelector('input')});
         });
-    }
+        
+        // Cancel button handler
+        modal.querySelector('#cancelDelete').addEventListener('click', () => {
+          document.body.removeChild(modal);
+        });
+        
+        // Confirm delete button handler
+        modal.querySelector('#confirmDelete').addEventListener('click', () => {
+          const selectedTests = checkboxes
+            .filter(item => item.checkbox.checked)
+            .map(item => item.id);
+          
+          if (selectedTests.length === 0) {
+            alert('Please select at least one test to delete.');
+            return;
+          }
+          
+          const updates = {};
+          selectedTests.forEach(id => {
+            updates[id] = null;
+          });
+          
+          database.ref('tests').update(updates)
+            .then(() => {
+              alert(`${selectedTests.length} test(s) deleted successfully.`);
+              document.body.removeChild(modal);
+              loadGlobalTests();
+            })
+            .catch(error => {
+              console.error('Error deleting tests:', error);
+              alert('Failed to delete tests. Please try again.');
+            });
+        });
+      })
+      .catch(error => {
+        console.error('Error fetching user tests:', error);
+        alert('Failed to fetch your tests. Please try again.');
+      });
   });
 });
